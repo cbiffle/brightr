@@ -1,0 +1,49 @@
+# `brightr`: change backlight on Linux
+
+This is a very simple command line tool for changing the backlight on a Linux
+system.
+
+To build this, you will need Rust installed (ideally through Rustup). You can
+try it out by running
+
+```
+cargo run
+```
+
+or install it with your other Cargo binaries using
+
+```
+cargo install --path . --locked
+```
+
+The command line interface currently looks like this (run without arguments, or
+with `help`, to get the current instructions):
+
+```
+Adjust display backlight. All values are in percentages unless overridden
+using -r/--raw
+
+Usage: brightr [OPTIONS] <COMMAND>
+
+Commands:
+  get   Print the current backlight setting in the format "x/y",
+            where x is the current setting, and y is the max
+  set   Set the backlight to a specific value
+  up    Increase the backlight brightness relative to its current
+            level
+  down  Decrease the backlight brightness relative to its current
+            level
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -n, --name <NAME>  Name of backlight device to adjust. Use this to
+                     override the automatic detection logic
+  -r, --raw          Use the driver's raw brightness values instead of
+                     percentage
+  -p, --picky        Exit with a non-zero status if the requested
+                     brightness would be out of range for the device.
+                     This can be useful for detecting when the top or
+                     bottom of the scale has been reached, to provide
+                     user feedback
+  -h, --help         Print help
+```
