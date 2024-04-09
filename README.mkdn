@@ -1,19 +1,23 @@
 # `brightr`: change backlight on Linux
 
-This is a very simple command line tool for changing the backlight on a Linux
-system.
+This is a very simple library and command line tool for changing the backlight
+on a Linux system.
 
-To build this, you will need Rust installed (ideally through Rustup). You can
+To keep the dependencies of the library down, the command line tool is in this
+repo as an _example._ This means you need to pass an extra flag when you're
+running or installing it.
+
+To run the tool, you will need Rust installed (ideally through Rustup). You can
 try it out by running
 
 ```
-cargo run
+cargo run --example brightr
 ```
 
 or install it with your other Cargo binaries using
 
 ```
-cargo install --path . --locked
+cargo install --path . --locked --examples
 ```
 
 The command line interface currently looks like this (run without arguments, or
