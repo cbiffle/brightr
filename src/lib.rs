@@ -8,9 +8,8 @@
 //! root privileges. It will only work when run by a user who is currently
 //! logged in at the seat that controls the display in question.
 
-use anyhow::{bail, Context};
 use logind_zbus::session::SessionProxyBlocking;
-use std::{ffi::OsString, fs, path::Path};
+use std::{ffi::OsString, fs, path::Path, io};
 use zbus::blocking::Connection;
 
 /// A description of a backlight device found by this library.
@@ -27,12 +26,33 @@ pub struct Backlight {
     pub max: u32,
 }
 
+/// Things that can go wrong when using this library.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// We couldn't find any compatible backlights, so we can't adjust anything.
+    #[error("no compatible backlights found on this system")]
+    EternalDarkness,
+    /// Errors accessing the backlight directory in sys.
+    #[error("can't access /sys/class/backlight")]
+    SysAccess(#[source] io::Error),
+    /// Errors accessing a specific backlight (included by path).
+    #[error("can't use backlight device {0}")]
+    Access(String, #[source] io::Error),
+    /// A backlight device produced non-numeric output, which is super weird.
+    #[error("backlight device {0} produced non-numeric output: {1}")]
+    Parsing(String, String, #[source] std::num::ParseIntError),
+
+    /// Something happened in communication with logind.
+    #[error("problem changing brightness over DBus")]
+    Dbus(#[from] zbus::Error),
+}
+
 /// Locates the first suitable backlight device in `/sys/class/backlight`. Since
 /// most systems have either zero or one backlight, this limited operation
 /// covers a lot of use cases.
 ///
 /// On success, returns both the `Backlight` and its current raw setting.
-pub fn find_first_backlight() -> anyhow::Result<(Backlight, u32)> {
+pub fn find_first_backlight() -> Result<(Backlight, u32), Error> {
     // The Session proxy in logind will happily let us set the backlight, if we
     // know the backlight's subsystem and name. It does not, however, provide us
     // with any way to actually _discover_ that information. And so we do it the
@@ -41,11 +61,10 @@ pub fn find_first_backlight() -> anyhow::Result<(Backlight, u32)> {
     // Fortunately the hard way is available to unprivileged users, and that's
     // presumably why logind didn't offer to proxy it for us.
 
-    let dir = fs::read_dir("/sys/class/backlight")
-        .context("can't access directory /sys/class/backlight")?;
+    let dir = fs::read_dir("/sys/class/backlight").map_err(Error::SysAccess)?;
 
     for dirent in dir {
-        let dirent = dirent?;
+        let dirent = dirent.map_err(Error::SysAccess)?;
         let path = dirent.path();
 
         match read_backlight_settings(&path) {
@@ -70,16 +89,15 @@ pub fn find_first_backlight() -> anyhow::Result<(Backlight, u32)> {
         }
     }
 
-    bail!("cannot find any valid backlight devices in /sys/class/backlight")
+    Err(Error::EternalDarkness)
 }
 
 /// Finds a backlight given a user-specified name.
 ///
 /// On success, returns both the `Backlight` and its current setting.
-pub fn use_specific_backlight(name: OsString) -> anyhow::Result<(Backlight, u32)> {
+pub fn use_specific_backlight(name: OsString) -> Result<(Backlight, u32), Error> {
     let path = Path::new("/sys/class/backlight").join(&name);
-    let (current, max) = read_backlight_settings(&path)
-        .with_context(|| format!("can't use explicitly requested backlight device {name:?}"))?;
+    let (current, max) = read_backlight_settings(&path)?;
 
     Ok((Backlight { name, max }, current))
 }
@@ -99,15 +117,14 @@ pub fn set_brightness(
     session: &SessionProxyBlocking,
     backlight: &Backlight,
     new_value: u32,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
     let Some(name) = backlight.name.to_str() else {
-        // This _really_ shouldn't be able to happen, but.
-        bail!("backlight name not valid UTF-8?! name: {:?}", backlight.name);
+        // This _really_ shouldn't be able to happen, so I've decided to model
+        // it as a panic rather than an error case for now.
+        panic!("backlight name not valid UTF-8?! name: {:?}", backlight.name);
     };
 
-    session
-        .set_brightness("backlight", name, new_value)
-        .with_context(|| format!("can't set backlight {name}"))
+    Ok(session.set_brightness("backlight", name, new_value)?)
 }
 
 /// Connects to the session DBus and logind and changes the brightness of a
@@ -120,7 +137,7 @@ pub fn set_brightness(
 pub fn connect_and_set_brightness(
     backlight: &Backlight,
     new_value: u32,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
     assert!(new_value <= backlight.max);
 
     // Set up our DBus connection to the current session (.../session/auto).
@@ -136,18 +153,14 @@ pub fn connect_and_set_brightness(
 
 /// Loads settings for a single backlight device given its fully-qualified
 /// directory path. Returns: `(current_value, max_value)`.
-fn read_backlight_settings(path: &Path) -> anyhow::Result<(u32, u32)> {
+fn read_backlight_settings(path: &Path) -> Result<(u32, u32), Error> {
     let mut parsed = vec![];
     for component in ["brightness", "max_brightness"] {
         let c_path = path.join(component);
         let contents = fs::read_to_string(&c_path)
-            .with_context(|| format!("reading backlight file {}", c_path.display()))?;
-        let number = contents.trim().parse::<u32>().with_context(|| {
-            format!(
-                "parsing brightness value from file {}: {contents}",
-                c_path.display()
-            )
-        })?;
+            .map_err(|e| Error::Access(c_path.display().to_string(), e))?;
+        let number = contents.trim().parse::<u32>()
+            .map_err(|e| Error::Parsing(c_path.display().to_string(), contents.trim().to_string(), e))?;
         parsed.push(number);
     }
     Ok((parsed[0], parsed[1]))

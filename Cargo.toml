@@ -9,4 +9,5 @@ edition = "2021"
 anyhow = "1.0.81"
 clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
 logind-zbus = "4.0.2"
+thiserror = "1.0.58"
 zbus = { version = "4.1.2", default-features = false, features = ["blocking"] }
