@@ -99,54 +99,49 @@ fn main() -> anyhow::Result<()> {
         brightr::find_first_backlight()?
     };
 
-    let current_pct = to_percent(&bl, args.exponent, current);
+    // Map values into the appropriate unit depending on the arguments.
+    let (current_user, max_user) = if args.raw {
+        (current, bl.max)
+    } else {
+        (to_percent(&bl, args.exponent, current), 100)
+    };
 
     // Apply the requested brightness twiddling to compute a new target value,
     // if needed. We produce None here if the value is unrepresentable, which
     // mostly happens when trying to adjust the brightness down past zero, but
     // could also happen when adjusting _up_ on a particularly goofy device that
     // uses the full 32-bit brightness range.
-    let target = match args.cmd {
+    let target_user = match args.cmd {
         SubCmd::Get => {
-            let (num, den) = if args.raw {
-                (current, bl.max)
-            } else {
-                (current_pct, 100)
-            };
-            println!("{num}/{den}");
+            println!("{current_user}/{max_user}");
             // No change required for this verb. In fact, we'll just skip the
             // rest of the program, to simplify the common case below.
             return Ok(());
         }
-        // Set is just a unit conversion.
-        SubCmd::Set { value } => {
-            if args.raw {
-                value
-            } else {
-                from_percent(&bl, args.exponent, value)
-            }
-        }
-        // Up/Down convert the unit, saturating on u32 overflow. On the "Up"
-        // case this is ridiculous, on the "Down" case it keeps us from wrapping
-        // past zero on release builds.
+        // No logic required for set.
+        SubCmd::Set { value } => value,
+        // Up/Down saturate on u32 overflow. In the "Up" case this is
+        // ridiculous, on the "Down" case it keeps us from wrapping past zero on
+        // release builds.
         SubCmd::Up { by } => {
             if args.picky && current == bl.max {
                 bail!("cannot increase brightness past range for device")
-            } else if args.raw {
-                current.saturating_add(by)
-            } else {
-                from_percent(&bl, args.exponent, current_pct.saturating_add(by))
             }
+            current_user.saturating_add(by)
         }
         SubCmd::Down { by } => {
             if args.picky && current <= args.min {
                 bail!("cannot decrease brightness past {}", args.min)
-            } else if args.raw {
-                current.saturating_sub(by)
-            } else {
-                from_percent(&bl, args.exponent, current_pct.saturating_sub(by))
             }
+            current_user.saturating_sub(by)
         }
+    };
+
+    // Map back into device units if required.
+    let target = if args.raw {
+        target_user
+    } else {
+        from_percent(&bl, args.exponent, target_user)
     };
 
     // Send a message to the session, limiting the value sent to the device
