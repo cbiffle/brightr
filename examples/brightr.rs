@@ -12,8 +12,7 @@ use anyhow::bail;
 use clap::Parser;
 use std::ffi::OsString;
 
-/// Adjust display backlight. All values are in percentages unless overridden
-/// using -r/--raw.
+/// Adjust display backlight.
 #[derive(Parser)]
 struct Brightr {
     /// Name of backlight device to adjust. Use this to override the automatic

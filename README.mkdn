@@ -24,30 +24,34 @@ The command line interface currently looks like this (run without arguments, or
 with `help`, to get the current instructions):
 
 ```
-Adjust display backlight. All values are in percentages unless overridden
-using -r/--raw
+Adjust display backlight
 
 Usage: brightr [OPTIONS] <COMMAND>
 
 Commands:
-  get   Print the current backlight setting in the format "x/y",
-            where x is the current setting, and y is the max
+  get   Print the current backlight setting in the format "x/y", where x is
+            the current setting, and y is the max
   set   Set the backlight to a specific value
-  up    Increase the backlight brightness relative to its current
-            level
-  down  Decrease the backlight brightness relative to its current
-            level
+  up    Increase the backlight brightness relative to its current level,
+            saturating at the top of the device's range
+  down  Decrease the backlight brightness relative to its current level,
+            saturating at the requested minimum brightness level
   help  Print this message or the help of the given subcommand(s)
 
 Options:
-  -n, --name <NAME>  Name of backlight device to adjust. Use this to
-                     override the automatic detection logic
-  -r, --raw          Use the driver's raw brightness values instead of
-                     percentage
-  -p, --picky        Exit with a non-zero status if the requested
-                     brightness would be out of range for the device.
-                     This can be useful for detecting when the top or
-                     bottom of the scale has been reached, to provide
-                     user feedback
-  -h, --help         Print help
+  -p, --picky  Exit with a non-zero status if the device was already at the edge
+               of its range and could not be adjusted further. This can be useful
+               for detecting when the top or bottom of the scale has been
+               reached, to provide user feedback
+  -h, --help   Print help
+
+Device Options:
+  -n, --name <NAME>  Name of backlight device to adjust. Use this to override the
+                     automatic detection logic
+  -r, --raw          Use the driver's raw brightness values for all input and
+                     output instead of percentages
+  -m, --min <RAW>    Saturate the bottom end of the brightness range at this
+                     (raw) value rather than zero. This is useful for systems
+                     that shut the backlight off completely at zero, if you don't
+                     want them to do that [default: 0]
 ```
