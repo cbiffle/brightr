@@ -18,16 +18,31 @@ use std::ffi::OsString;
 struct Brightr {
     /// Name of backlight device to adjust. Use this to override the automatic
     /// detection logic.
-    #[clap(short, long, global = true)]
+    #[clap(short, long, global = true, help_heading = "Device Options")]
     name: Option<OsString>,
 
-    /// Use the driver's raw brightness values instead of percentage.
-    #[clap(short, long, global = true)]
+    /// Use the driver's raw brightness values for all input and output instead
+    /// of percentages.
+    #[clap(short, long, global = true, help_heading = "Device Options")]
     raw: bool,
 
-    /// Exit with a non-zero status if the requested brightness would be out of
-    /// range for the device. This can be useful for detecting when the top or
-    /// bottom of the scale has been reached, to provide user feedback.
+    /// Saturate the bottom end of the brightness range at this (raw) value
+    /// rather than zero. This is useful for systems that shut the backlight off
+    /// completely at zero, if you don't want them to do that.
+    #[clap(
+        long,
+        short,
+        global = true,
+        default_value_t = 0,
+        value_name = "RAW",
+        help_heading = "Device Options"
+    )]
+    min: u32,
+
+    /// Exit with a non-zero status if the device was already at the edge of its
+    /// range and could not be adjusted further. This can be useful for
+    /// detecting when the top or bottom of the scale has been reached, to
+    /// provide user feedback.
     #[clap(short, long, global = true)]
     picky: bool,
 
@@ -45,12 +60,14 @@ enum SubCmd {
         /// New backlight value.
         value: u32,
     },
-    /// Increase the backlight brightness relative to its current level.
+    /// Increase the backlight brightness relative to its current level,
+    /// saturating at the top of the device's range.
     Up {
         /// Amount to increase by.
         by: u32,
     },
-    /// Decrease the backlight brightness relative to its current level.
+    /// Decrease the backlight brightness relative to its current level,
+    /// saturating at the requested minimum brightness level.
     Down {
         /// Amount to decrease by.
         by: u32,
@@ -72,63 +89,55 @@ fn main() -> anyhow::Result<()> {
 
     // Shorthand.
     let max = bl.max;
+    let convert = |value| {
+        if args.raw {
+            value
+        } else {
+            bl.from_percent(value)
+        }
+    };
 
     // Apply the requested brightness twiddling to compute a new target value,
     // if needed. We produce None here if the value is unrepresentable, which
     // mostly happens when trying to adjust the brightness down past zero, but
     // could also happen when adjusting _up_ on a particularly goofy device that
     // uses the full 32-bit brightness range.
-    let mut target = match args.cmd {
+    let target = match args.cmd {
         SubCmd::Get => {
-            if args.raw {
-                println!("{current}/{max}");
+            let (num, den) = if args.raw {
+                (current, max)
             } else {
-                let pct_now = current * 100 / max;
-                println!("{pct_now}/100");
-            }
+                (bl.to_percent(current), 100)
+            };
+            println!("{num}/{den}");
             // No change required for this verb. In fact, we'll just skip the
             // rest of the program, to simplify the common case below.
             return Ok(());
         }
-        SubCmd::Set { value } => {
-            if args.raw {
-                Some(value)
-            } else {
-                Some(value * max / 100)
-            }
-        }
+        // Set is just a unit conversion.
+        SubCmd::Set { value } => convert(value),
+        // Up/Down convert the unit, saturating on u32 overflow. On the "Up"
+        // case this is ridiculous, on the "Down" case it keeps us from wrapping
+        // past zero on release builds.
         SubCmd::Up { by } => {
-            if args.raw {
-                current.checked_add(by)
+            if args.picky && current == bl.max {
+                bail!("cannot increase brightness past range for device")
             } else {
-                current.checked_add(by * max / 100)
+                current.saturating_add(convert(by))
             }
         }
         SubCmd::Down { by } => {
-            if args.raw {
-                current.checked_sub(by)
+            if args.picky && current <= args.min {
+                bail!("cannot decrease brightness past {}", args.min)
             } else {
-                current.checked_sub(by * max / 100)
+                current.saturating_sub(convert(by))
             }
         }
     };
 
-    // Check value against device max.
-    if let Some(v) = target {
-        if v > max {
-            // Flatten it to share error handling code below.
-            target = None;
-        }
-    }
+    // Send a message to the session, limiting the value sent to the device
+    // range.
+    brightr::connect_and_set_brightness(&bl, target.clamp(args.min, bl.max))?;
 
-    // Send message if required. (We don't bother connecting to DBus at all for
-    // the get subcommand.)
-    if let Some(new_value) = target {
-        brightr::connect_and_set_brightness(&bl, new_value)?;
-    } else if args.picky {
-        // We've got an out of range brightness value!
-        bail!("can't adjust brightness outside of range of device")
-    }
-    
     Ok(())
 }

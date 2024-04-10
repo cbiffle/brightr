@@ -26,6 +26,22 @@ pub struct Backlight {
     pub max: u32,
 }
 
+impl Backlight {
+    /// Computes a percentage of this backlight's max.
+    ///
+    /// `pct` must be between 0 and 100, inclusive.
+    pub fn from_percent(&self, pct: u32) -> u32 {
+        (u64::from(pct) * u64::from(self.max) / 100) as u32
+    }
+
+    /// Converts a setting for this backlight into a percentage of max.
+    ///
+    /// `value` must be valid for this backlight.
+    pub fn to_percent(&self, value: u32) -> u32 {
+        (u64::from(value) * 100 / u64::from(self.max)) as u32
+    }
+}
+
 /// Things that can go wrong when using this library.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
