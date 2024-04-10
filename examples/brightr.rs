@@ -9,6 +9,7 @@
 //! logged in at the seat that controls the display in question.
 
 use anyhow::bail;
+use brightr::Backlight;
 use clap::Parser;
 use std::ffi::OsString;
 
@@ -24,6 +25,18 @@ struct Brightr {
     /// of percentages.
     #[clap(short, long, global = true, help_heading = "Device Options")]
     raw: bool,
+
+    /// Map percentages to raw values using this exponent, to apply gamma
+    /// correction. A value of 3-4 is often about right; the default of 1 makes
+    /// the mapping linear.
+    #[clap(
+        short,
+        long,
+        global = true,
+        default_value_t = 1.,
+        help_heading = "Device Options"
+    )]
+    exponent: f64,
 
     /// Saturate the bottom end of the brightness range at this (raw) value
     /// rather than zero. This is useful for systems that shut the backlight off
@@ -86,15 +99,7 @@ fn main() -> anyhow::Result<()> {
         brightr::find_first_backlight()?
     };
 
-    // Shorthand.
-    let max = bl.max;
-    let convert = |value| {
-        if args.raw {
-            value
-        } else {
-            bl.from_percent(value)
-        }
-    };
+    let current_pct = to_percent(&bl, args.exponent, current);
 
     // Apply the requested brightness twiddling to compute a new target value,
     // if needed. We produce None here if the value is unrepresentable, which
@@ -104,9 +109,9 @@ fn main() -> anyhow::Result<()> {
     let target = match args.cmd {
         SubCmd::Get => {
             let (num, den) = if args.raw {
-                (current, max)
+                (current, bl.max)
             } else {
-                (bl.to_percent(current), 100)
+                (current_pct, 100)
             };
             println!("{num}/{den}");
             // No change required for this verb. In fact, we'll just skip the
@@ -114,22 +119,32 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         // Set is just a unit conversion.
-        SubCmd::Set { value } => convert(value),
+        SubCmd::Set { value } => {
+            if args.raw {
+                value
+            } else {
+                from_percent(&bl, args.exponent, value)
+            }
+        }
         // Up/Down convert the unit, saturating on u32 overflow. On the "Up"
         // case this is ridiculous, on the "Down" case it keeps us from wrapping
         // past zero on release builds.
         SubCmd::Up { by } => {
             if args.picky && current == bl.max {
                 bail!("cannot increase brightness past range for device")
+            } else if args.raw {
+                current.saturating_add(by)
             } else {
-                current.saturating_add(convert(by))
+                from_percent(&bl, args.exponent, current_pct.saturating_add(by))
             }
         }
         SubCmd::Down { by } => {
             if args.picky && current <= args.min {
                 bail!("cannot decrease brightness past {}", args.min)
+            } else if args.raw {
+                current.saturating_sub(by)
             } else {
-                current.saturating_sub(convert(by))
+                from_percent(&bl, args.exponent, current_pct.saturating_sub(by))
             }
         }
     };
@@ -139,4 +154,18 @@ fn main() -> anyhow::Result<()> {
     brightr::connect_and_set_brightness(&bl, target.clamp(args.min, bl.max))?;
 
     Ok(())
+}
+
+/// Computes a percentage of this backlight's max.
+///
+/// `pct` must be between 0 and 100, inclusive.
+fn from_percent(bl: &Backlight, e: f64, pct: u32) -> u32 {
+    ((f64::from(pct) / 100.).powf(e) * f64::from(bl.max)) as u32
+}
+
+/// Converts a setting for this backlight into a percentage of max.
+///
+/// `value` must be valid for this backlight.
+fn to_percent(bl: &Backlight, e: f64, value: u32) -> u32 {
+    ((f64::from(value) / f64::from(bl.max)).powf(1. / e) * 100.) as u32
 }
