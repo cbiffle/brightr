@@ -20,6 +20,14 @@ or install it with your other Cargo binaries using
 cargo install --path . --locked --examples
 ```
 
+In my environment, after installing `brightr`, I've set up the
+increase-brightness and decrease-brightness keys to run, respectively,
+
+```
+brightr -m 1 -e 4 up 10
+brightr -m 1 -e 4 down 10
+```
+
 The command line interface currently looks like this (run without arguments, or
 with `help`, to get the current instructions):
 
