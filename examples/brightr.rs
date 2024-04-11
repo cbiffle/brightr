@@ -11,6 +11,7 @@
 use anyhow::bail;
 use brightr::Backlight;
 use clap::Parser;
+use log::debug;
 use std::ffi::OsString;
 
 /// Adjust display backlight.
@@ -90,6 +91,8 @@ fn main() -> anyhow::Result<()> {
     // First, validate the arguments.
     let args = Brightr::parse();
 
+    env_logger::init();
+
     // Then, see if there is a supported and matching backlight device. This way
     // we can warn the user if their system is unsupported, before presenting
     // possibly confusing DBus errors.
@@ -99,12 +102,17 @@ fn main() -> anyhow::Result<()> {
         brightr::find_first_backlight()?
     };
 
+    debug!("backlight raw setting = {current} / {}", bl.max);
+
     // Map values into the appropriate unit depending on the arguments.
     let (current_user, max_user) = if args.raw {
         (current, bl.max)
     } else {
         (to_percent(&bl, args.exponent, current), 100)
     };
+
+    debug!("in requested units: {current_user} / {max_user}");
+
 
     // Apply the requested brightness twiddling to compute a new target value,
     // if needed. We produce None here if the value is unrepresentable, which
@@ -137,16 +145,21 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
+    debug!("target value = {target_user}");
+
     // Map back into device units if required.
     let target = if args.raw {
         target_user
     } else {
         from_percent(&bl, args.exponent, target_user)
-    };
+    }.clamp(args.min, bl.max);
+
+    debug!("target in raw units = {target}");
+    debug!("target in percentage = {}%)", to_percent(&bl, args.exponent, target));
 
     // Send a message to the session, limiting the value sent to the device
     // range.
-    brightr::connect_and_set_brightness(&bl, target.clamp(args.min, bl.max))?;
+    brightr::connect_and_set_brightness(&bl, target)?;
 
     Ok(())
 }
@@ -155,12 +168,12 @@ fn main() -> anyhow::Result<()> {
 ///
 /// `pct` must be between 0 and 100, inclusive.
 fn from_percent(bl: &Backlight, e: f64, pct: u32) -> u32 {
-    ((f64::from(pct) / 100.).powf(e) * f64::from(bl.max)) as u32
+    (((f64::from(pct) / 100.).powf(e)) * f64::from(bl.max)).round() as u32
 }
 
 /// Converts a setting for this backlight into a percentage of max.
 ///
 /// `value` must be valid for this backlight.
 fn to_percent(bl: &Backlight, e: f64, value: u32) -> u32 {
-    ((f64::from(value) / f64::from(bl.max)).powf(1. / e) * 100.) as u32
+    ((f64::from(value) / f64::from(bl.max)).powf(1. / e) * 100.).round() as u32
 }
