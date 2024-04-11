@@ -28,13 +28,14 @@ struct Brightr {
     raw: bool,
 
     /// Map percentages to raw values using this exponent, to apply gamma
-    /// correction. A value of 3-4 is often about right; the default of 1 makes
+    /// correction. A value of 2-4 is often about right; the default of 1 makes
     /// the mapping linear.
     #[clap(
         short,
         long,
         global = true,
         default_value_t = 1.,
+        value_name = "N",
         help_heading = "Device Options"
     )]
     exponent: f64,

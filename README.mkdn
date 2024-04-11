@@ -3,6 +3,8 @@
 This is a very simple library and command line tool for changing the backlight
 on a Linux system.
 
+## Trying it out
+
 To keep the dependencies of the library down, the command line tool is in this
 repo as an _example._ This means you need to pass an extra flag when you're
 running or installing it.
@@ -20,6 +22,8 @@ or install it with your other Cargo binaries using
 cargo install --path . --locked --examples
 ```
 
+## Using the tool
+
 In my environment, after installing `brightr`, I've set up the
 increase-brightness and decrease-brightness keys to run, respectively,
 
@@ -27,6 +31,11 @@ increase-brightness and decrease-brightness keys to run, respectively,
 brightr -m 1 -e 4 up 10
 brightr -m 1 -e 4 down 10
 ```
+
+The `-m` may not be necessary if your display doesn't turn all the way off at
+zero --- in my testing some do, some don't. The value given to `-e` determines
+the exponent used to map internal backlight levels to perceived brightness, and
+may also want to be tweaked (try values between 2 and 4, including fractional).
 
 The command line interface currently looks like this (run without arguments, or
 with `help`, to get the current instructions):
@@ -37,8 +46,8 @@ Adjust display backlight
 Usage: brightr [OPTIONS] <COMMAND>
 
 Commands:
-  get   Print the current backlight setting in the format "x/y", where x is
-            the current setting, and y is the max
+  get   Print the current backlight setting in the format "x/y", where x
+            is the current setting, and y is the max
   set   Set the backlight to a specific value
   up    Increase the backlight brightness relative to its current level,
             saturating at the top of the device's range
@@ -47,19 +56,23 @@ Commands:
   help  Print this message or the help of the given subcommand(s)
 
 Options:
-  -p, --picky  Exit with a non-zero status if the device was already at the edge
-               of its range and could not be adjusted further. This can be useful
-               for detecting when the top or bottom of the scale has been
-               reached, to provide user feedback
+  -p, --picky  Exit with a non-zero status if the device was already at the
+               edge of its range and could not be adjusted further. This can
+               be useful for detecting when the top or bottom of the scale
+               has been reached, to provide user feedback
   -h, --help   Print help
 
 Device Options:
-  -n, --name <NAME>  Name of backlight device to adjust. Use this to override the
-                     automatic detection logic
-  -r, --raw          Use the driver's raw brightness values for all input and
-                     output instead of percentages
-  -m, --min <RAW>    Saturate the bottom end of the brightness range at this
-                     (raw) value rather than zero. This is useful for systems
-                     that shut the backlight off completely at zero, if you don't
-                     want them to do that [default: 0]
+  -n, --name <NAME>   Name of backlight device to adjust. Use this to
+                      override the automatic detection logic
+  -r, --raw           Use the driver's raw brightness values for all input
+                      and output instead of percentages
+  -e, --exponent <N>  Map percentages to raw values using this exponent, to
+                      apply gamma correction. A value of 2-4 is often about
+                      right; the default of 1 makes the mapping linear
+                      [default: 1]
+  -m, --min <RAW>     Saturate the bottom end of the brightness range at
+                      this (raw) value rather than zero. This is useful for
+                      systems that shut the backlight off completely at
+                      zero, if you don't want them to do that [default: 0]
 ```
