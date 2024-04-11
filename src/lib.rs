@@ -13,6 +13,7 @@ use std::{ffi::OsString, fs, io, path::Path};
 use zbus::blocking::Connection;
 
 /// A description of a backlight device found by this library.
+#[derive(Clone, Debug)]
 pub struct Backlight {
     /// Name of the backlight. Despite being a "device name" this is not a name
     /// you'll find in `/dev`. It appears in two places:
@@ -119,7 +120,7 @@ pub fn use_specific_backlight(
 /// If `new_value` is out of range for `backlight` (check it against
 /// `backlight.max`).
 pub fn set_brightness(
-    session: &SessionProxyBlocking,
+    session: &SessionProxyBlocking<'_>,
     backlight: &Backlight,
     new_value: u32,
 ) -> Result<(), Error> {

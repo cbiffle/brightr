@@ -15,3 +15,9 @@ anyhow = "1.0.81"
 clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
 env_logger = "0.11.3"
 log = "0.4.21"
+
+[lints.rust]
+elided_lifetimes_in_paths = "deny"
+missing_debug_implementations = "deny"
+missing_docs = "deny"
+unsafe_code = "forbid"
