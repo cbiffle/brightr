@@ -9,7 +9,7 @@
 //! logged in at the seat that controls the display in question.
 
 use logind_zbus::session::SessionProxyBlocking;
-use std::{ffi::OsString, fs, path::Path, io};
+use std::{ffi::OsString, fs, io, path::Path};
 use zbus::blocking::Connection;
 
 /// A description of a backlight device found by this library.
@@ -84,7 +84,10 @@ pub fn find_first_backlight() -> Result<(Backlight, u32), Error> {
                 ));
             }
             Err(e) => {
-                eprintln!("skipping backlight-like device at {}: {e}", path.display());
+                eprintln!(
+                    "skipping backlight-like device at {}: {e}",
+                    path.display()
+                );
             }
         }
     }
@@ -95,7 +98,9 @@ pub fn find_first_backlight() -> Result<(Backlight, u32), Error> {
 /// Finds a backlight given a user-specified name.
 ///
 /// On success, returns both the `Backlight` and its current setting.
-pub fn use_specific_backlight(name: OsString) -> Result<(Backlight, u32), Error> {
+pub fn use_specific_backlight(
+    name: OsString,
+) -> Result<(Backlight, u32), Error> {
     let path = Path::new("/sys/class/backlight").join(&name);
     let (current, max) = read_backlight_settings(&path)?;
 
@@ -121,7 +126,10 @@ pub fn set_brightness(
     let Some(name) = backlight.name.to_str() else {
         // This _really_ shouldn't be able to happen, so I've decided to model
         // it as a panic rather than an error case for now.
-        panic!("backlight name not valid UTF-8?! name: {:?}", backlight.name);
+        panic!(
+            "backlight name not valid UTF-8?! name: {:?}",
+            backlight.name
+        );
     };
 
     Ok(session.set_brightness("backlight", name, new_value)?)
@@ -159,8 +167,13 @@ fn read_backlight_settings(path: &Path) -> Result<(u32, u32), Error> {
         let c_path = path.join(component);
         let contents = fs::read_to_string(&c_path)
             .map_err(|e| Error::Access(c_path.display().to_string(), e))?;
-        let number = contents.trim().parse::<u32>()
-            .map_err(|e| Error::Parsing(c_path.display().to_string(), contents.trim().to_string(), e))?;
+        let number = contents.trim().parse::<u32>().map_err(|e| {
+            Error::Parsing(
+                c_path.display().to_string(),
+                contents.trim().to_string(),
+                e,
+            )
+        })?;
         parsed.push(number);
     }
     Ok((parsed[0], parsed[1]))

@@ -114,7 +114,6 @@ fn main() -> anyhow::Result<()> {
 
     debug!("in requested units: {current_user} / {max_user}");
 
-
     // Apply the requested brightness twiddling to compute a new target value,
     // if needed. We produce None here if the value is unrepresentable, which
     // mostly happens when trying to adjust the brightness down past zero, but
@@ -153,10 +152,14 @@ fn main() -> anyhow::Result<()> {
         target_user
     } else {
         from_percent(&bl, args.exponent, target_user)
-    }.clamp(args.min, bl.max);
+    }
+    .clamp(args.min, bl.max);
 
     debug!("target in raw units = {target}");
-    debug!("target in percentage = {}%)", to_percent(&bl, args.exponent, target));
+    debug!(
+        "target in percentage = {}%)",
+        to_percent(&bl, args.exponent, target)
+    );
 
     // Send a message to the session, limiting the value sent to the device
     // range.
