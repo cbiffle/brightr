@@ -12,7 +12,6 @@ use anyhow::bail;
 use brightr::Backlight;
 use clap::Parser;
 use log::debug;
-use std::ffi::OsString;
 
 /// Adjust display backlight.
 #[derive(Parser)]
@@ -20,7 +19,7 @@ struct Brightr {
     /// Name of backlight device to adjust. Use this to override the automatic
     /// detection logic.
     #[clap(short, long, global = true, help_heading = "Device Options")]
-    name: Option<OsString>,
+    name: Option<String>,
 
     /// Use the driver's raw brightness values for all input and output instead
     /// of percentages.

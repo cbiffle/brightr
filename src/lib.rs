@@ -9,7 +9,7 @@
 //! logged in at the seat that controls the display in question.
 
 use logind_zbus::session::SessionProxyBlocking;
-use std::{ffi::OsString, fs, io, path::Path};
+use std::{fs, io, path::Path};
 use zbus::blocking::Connection;
 
 /// A description of a backlight device found by this library.
@@ -20,7 +20,7 @@ pub struct Backlight {
     ///
     /// - As a directory under `/sys/class/backlight/`
     /// - As the name passed to `logind` to control the backlight.
-    pub name: OsString,
+    pub name: String,
 
     /// Highest raw value the backlight supports. This value always means "fully
     /// on," but different drivers use different units and scales.
@@ -75,6 +75,11 @@ pub fn find_first_backlight() -> Result<(Backlight, u32), Error> {
                 // This error case really shouldn't be possible since we built
                 // the path by appending a name!
                 let name = path.file_name().expect("file should have a name");
+                // This error _is_ possible but unusual.
+                let Some(name) = name.to_str() else {
+                    eprintln!("skipping non-UTF8 backlight device: {name:?}");
+                    continue;
+                };
 
                 return Ok((
                     Backlight {
@@ -100,8 +105,9 @@ pub fn find_first_backlight() -> Result<(Backlight, u32), Error> {
 ///
 /// On success, returns both the `Backlight` and its current setting.
 pub fn use_specific_backlight(
-    name: OsString,
+    name: impl Into<String>
 ) -> Result<(Backlight, u32), Error> {
+    let name = name.into();
     let path = Path::new("/sys/class/backlight").join(&name);
     let (current, max) = read_backlight_settings(&path)?;
 
@@ -124,16 +130,7 @@ pub fn set_brightness(
     backlight: &Backlight,
     new_value: u32,
 ) -> Result<(), Error> {
-    let Some(name) = backlight.name.to_str() else {
-        // This _really_ shouldn't be able to happen, so I've decided to model
-        // it as a panic rather than an error case for now.
-        panic!(
-            "backlight name not valid UTF-8?! name: {:?}",
-            backlight.name
-        );
-    };
-
-    Ok(session.set_brightness("backlight", name, new_value)?)
+    Ok(session.set_brightness("backlight", &backlight.name, new_value)?)
 }
 
 /// Connects to the session DBus and logind and changes the brightness of a
