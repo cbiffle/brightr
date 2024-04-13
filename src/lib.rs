@@ -8,7 +8,7 @@
 //! root privileges. It will only work when run by a user who is currently
 //! logged in at the seat that controls the display in question.
 
-use logind_zbus::session::SessionProxyBlocking;
+use logind_zbus::session::{SessionProxyBlocking, SessionProxy};
 use std::{fs, io, path::Path};
 use zbus::blocking::Connection;
 
@@ -131,6 +131,25 @@ pub fn set_brightness(
     new_value: u32,
 ) -> Result<(), Error> {
     Ok(session.set_brightness("backlight", &backlight.name, new_value)?)
+}
+
+/// Sets the brightness of a `Backlight` given an existing connection to the
+/// session. This is marginally more efficient than setting up a new connection
+/// each time, if you want to change the backlight repeatedly or continuously.
+///
+/// If you want to change the backlight only once, the
+/// `connect_and_set_brightness` operation is more convenient.
+///
+/// # Panics
+///
+/// If `new_value` is out of range for `backlight` (check it against
+/// `backlight.max`).
+pub async fn async_set_brightness(
+    session: &SessionProxy<'_>,
+    backlight: &Backlight,
+    new_value: u32,
+) -> Result<(), Error> {
+    Ok(session.set_brightness("backlight", &backlight.name, new_value).await?)
 }
 
 /// Connects to the session DBus and logind and changes the brightness of a
