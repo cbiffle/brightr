@@ -1,14 +1,14 @@
 [package]
 name = "brightr"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-logind-zbus = "4.0.2"
-thiserror = "1.0.58"
-zbus = { version = "4.1.2", default-features = false, features = ["blocking"] }
+logind-zbus = "5.2.0"
+thiserror = "2.0.11"
+zbus = { version = "5.5.0", default-features = false, features = ["blocking"] }
 
 [dev-dependencies]
 anyhow = "1.0.81"
